@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pi Ticket Marketplace</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 15px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #6a0dad;
+    }
+
+    .card {
+      background: white;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+
+    button {
+      background: orange;
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 6px;
+      width: 100%;
+      font-weight: bold;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .fee {
+      color: red;
+      font-size: 14px;
+    }
+
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Pi Ticket Marketplace</h1>
+
+<div class="card">
+  <h3>Sell Ticket</h3>
+  <input id="event" placeholder="Event name">
+  <input id="price" type="number" placeholder="Price in Pi">
+  <button onclick="addTicket()">List Ticket</button>
+</div>
+
+<div id="tickets"></div>
+
+<script>
+
+let tickets = JSON.parse(localStorage.getItem("tickets")) || [];
+
+function addTicket() {
+  let event = document.getElementById("event").value;
+  let price = parseFloat(document.getElementById("price").value);
+
+  if (!event || !price) {
+    alert("Please fill all fields");
+    return;
+  }
+
+  tickets.push({
+    event: event,
+    price: price,
+    sold: false
+  });
+
+  localStorage.setItem("tickets", JSON.stringify(tickets));
+
+  document.getElementById("event").value = "";
+  document.getElementById("price").value = "";
+
+  displayTickets();
+}
+
+function displayTickets() {
+  let container = document.getElementById("tickets");
+  container.innerHTML = "";
+
+  tickets.forEach((ticket, index) => {
+
+    if (ticket.sold) return;
+
+    let fee = ticket.price * 0.08;
+    let sellerGets = ticket.price - fee;
+
+    container.innerHTML += `
+      <div class="card">
+        <h3>${ticket.event}</h3>
+        <p><strong>Price:</strong> ${ticket.price} Pi</p>
+        <p class="fee">Platform Fee: ${fee.toFixed(2)} Pi</p>
+        <p><strong>Seller gets:</strong> ${sellerGets.toFixed(2)} Pi</p>
+        <button onclick="buyTicket(${index})">Buy with Pi</button>
+      </div>
+    `;
+  });
+}
+
+function buyTicket(index) {
+  tickets[index].sold = true;
+
+  localStorage.setItem("tickets", JSON.stringify(tickets));
+
+  alert("Payment successful (Demo)");
+
+  displayTickets();
+}
+
+displayTickets();
+
+</script>
+
+</body>
+</html>
