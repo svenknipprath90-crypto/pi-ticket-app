@@ -3,7 +3,7 @@
 <head>
   <title>Pi Ticket Marketplace</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+  <script src="https://sdk.minepi.com/pi-sdk.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -11,12 +11,10 @@
       margin: 0;
       padding: 15px;
     }
-
     h1 {
       text-align: center;
       color: #6a0dad;
     }
-
     .card {
       background: white;
       padding: 15px;
@@ -24,7 +22,6 @@
       border-radius: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-
     input {
       width: 100%;
       padding: 12px;
@@ -32,8 +29,8 @@
       border-radius: 6px;
       border: 1px solid #ccc;
       font-size: 16px;
+      box-sizing: border-box;
     }
-
     button {
       background: orange;
       color: white;
@@ -44,27 +41,31 @@
       font-weight: bold;
       font-size: 16px;
       cursor: pointer;
+      margin-top: 8px;
     }
-
-    button:hover {
-      opacity: 0.9;
+    .secondary {
+      background: #6a0dad;
     }
-
     .fee {
       color: red;
       font-size: 14px;
     }
-
-    .success {
-      color: green;
-      font-weight: bold;
+    .userbox {
+      background: #eee;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 15px;
     }
   </style>
 </head>
-
 <body>
 
 <h1>Pi Ticket Marketplace</h1>
+
+<div class="userbox">
+  <div id="userStatus">Not logged in</div>
+  <button class="secondary" onclick="loginWithPi()">Login with Pi</button>
+</div>
 
 <div class="card">
   <h3>Sell Ticket</h3>
@@ -76,67 +77,112 @@
 <div id="tickets"></div>
 
 <script>
+  Pi.init({ version: "2.0", sandbox: true });
 
-let tickets = JSON.parse(localStorage.getItem("tickets")) || [];
+  let currentUser = null;
+  let tickets = JSON.parse(localStorage.getItem("tickets")) || [];
 
-function addTicket() {
-  let event = document.getElementById("event").value;
-  let price = parseFloat(document.getElementById("price").value);
+  async function loginWithPi() {
+    try {
+      const scopes = ['username', 'payments'];
+      const authResult = await Pi.authenticate(scopes, function(payment) {
+        console.log("Incomplete payment found:", payment);
+      });
 
-  if (!event || !price) {
-    alert("Please fill all fields");
-    return;
+      currentUser = authResult.user;
+      document.getElementById("userStatus").innerText =
+        "Logged in as: " + (currentUser.username || "Pi User");
+    } catch (err) {
+      console.error(err);
+      alert("Pi login failed");
+    }
   }
 
-  tickets.push({
-    event: event,
-    price: price,
-    sold: false
-  });
+  function addTicket() {
+    let event = document.getElementById("event").value;
+    let price = parseFloat(document.getElementById("price").value);
 
-  localStorage.setItem("tickets", JSON.stringify(tickets));
+    if (!event || !price) {
+      alert("Please fill all fields");
+      return;
+    }
 
-  document.getElementById("event").value = "";
-  document.getElementById("price").value = "";
+    tickets.push({
+      event: event,
+      price: price,
+      sold: false
+    });
+
+    localStorage.setItem("tickets", JSON.stringify(tickets));
+    document.getElementById("event").value = "";
+    document.getElementById("price").value = "";
+    displayTickets();
+  }
+
+  function displayTickets() {
+    let container = document.getElementById("tickets");
+    container.innerHTML = "";
+
+    tickets.forEach((ticket, index) => {
+      if (ticket.sold) return;
+
+      let fee = ticket.price * 0.08;
+      let sellerGets = ticket.price - fee;
+
+      container.innerHTML += `
+        <div class="card">
+          <h3>${ticket.event}</h3>
+          <p><strong>Price:</strong> ${ticket.price} Pi</p>
+          <p class="fee">Platform Fee: ${fee.toFixed(2)} Pi</p>
+          <p><strong>Seller gets:</strong> ${sellerGets.toFixed(2)} Pi</p>
+          <button onclick="buyTicket(${index}, ${ticket.price}, '${ticket.event.replace(/'/g, "\\'")}')">Buy with Pi</button>
+        </div>
+      `;
+    });
+  }
+
+  async function buyTicket(index, amount, memo) {
+    if (!currentUser) {
+      alert("Please login with Pi first");
+      return;
+    }
+
+    try {
+      const paymentData = {
+        amount: amount,
+        memo: "Ticket purchase: " + memo,
+        metadata: { ticketIndex: index, event: memo }
+      };
+
+      const callbacks = {
+        onReadyForServerApproval: function(paymentId) {
+          console.log("Ready for server approval:", paymentId);
+        },
+        onReadyForServerCompletion: function(paymentId, txid) {
+          console.log("Ready for completion:", paymentId, txid);
+          tickets[index].sold = true;
+          localStorage.setItem("tickets", JSON.stringify(tickets));
+          displayTickets();
+          alert("Payment successful");
+        },
+        onCancel: function(paymentId) {
+          console.log("Payment cancelled:", paymentId);
+          alert("Payment cancelled");
+        },
+        onError: function(error, payment) {
+          console.error("Payment error:", error, payment);
+          alert("Payment failed");
+        }
+      };
+
+      await Pi.createPayment(paymentData, callbacks);
+    } catch (err) {
+      console.error(err);
+      alert("Payment error");
+    }
+  }
 
   displayTickets();
-}
-
-function displayTickets() {
-  let container = document.getElementById("tickets");
-  container.innerHTML = "";
-
-  tickets.forEach((ticket, index) => {
-
-    if (ticket.sold) return;
-
-    let fee = ticket.price * 0.08;
-    let sellerGets = ticket.price - fee;
-
-    container.innerHTML += `
-      <div class="card">
-        <h3>${ticket.event}</h3>
-        <p><strong>Price:</strong> ${ticket.price} Pi</p>
-        <p class="fee">Platform Fee: ${fee.toFixed(2)} Pi</p>
-        <p><strong>Seller gets:</strong> ${sellerGets.toFixed(2)} Pi</p>
-        <button onclick="buyTicket(${index})">Buy with Pi</button>
-      </div>
-    `;
-  });
-}
-
-function buyTicket(index) {
-  tickets[index].sold = true;
-
-  localStorage.setItem("tickets", JSON.stringify(tickets));
-
-  alert("Payment successful (Demo)");
-
-  displayTickets();
-}
-
-displayTickets();
-
 </script>
 
 </body>
